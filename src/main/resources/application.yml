@@ -1,0 +1,16 @@
+server:
+  port: 8085
+
+aion:
+  identity:
+    enabled: true
+    mode: CHANNEL #OAUTH | CHANNEL
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
