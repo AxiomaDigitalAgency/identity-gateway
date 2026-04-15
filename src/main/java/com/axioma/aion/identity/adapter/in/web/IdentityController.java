@@ -8,7 +8,6 @@ import com.axioma.aion.identity.domain.model.SecurityRequest;
 import com.axioma.aion.identity.domain.port.in.AuthenticateRequestUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,11 +32,6 @@ public class IdentityController {
         );
 
         AuthenticationResult result = authenticateRequestUseCase.authenticate(securityRequest);
-
-        if (!result.success()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(identityWebMapper.toErrorResponse(result));
-        }
 
         return ResponseEntity.ok(identityWebMapper.toSuccessResponse(result));
     }
