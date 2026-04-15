@@ -1,4 +1,7 @@
 package com.axioma.aion.identity.domain.port.out;
 
-public class SessionTokenPort {
+import com.axioma.aion.identity.domain.model.SessionValidationResult;
+
+public interface SessionTokenPort {
+    SessionValidationResult validate(String sessionToken, String channel);
 }

@@ -14,3 +14,15 @@ management:
   endpoint:
     health:
       show-details: always
+
+clients:
+  tenant-service:
+    base-url: http://localhost:8082
+    validate-widget-path: /tenants/validate-widget-key
+
+app:
+  security:
+    session-jwt:
+      issuer: identity-gateway
+      secret-key: 9GXkP0kNT7EjmZupLpXvjPADOm6AZnEUMKAUP3KfgmQ=
+      ttl-seconds: 900
