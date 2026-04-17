@@ -76,3 +76,7 @@ app:
       issuer: identity-gateway
       secret-key: ${SESSION_JWT_SECRET:change-this-local-secret-key-with-at-least-32-chars}
       ttl-seconds: 900
+    provider-routing:
+      web: widget
+      whatsapp: widget
+      api: oauth

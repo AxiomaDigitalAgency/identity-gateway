@@ -6,7 +6,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @EnableConfigurationProperties({
         SessionProperties.class,
-        JwtProperties.class
+        JwtProperties.class,
+        SecurityRoutingProperties.class
 })
 public class SecurityConfig {
 }
