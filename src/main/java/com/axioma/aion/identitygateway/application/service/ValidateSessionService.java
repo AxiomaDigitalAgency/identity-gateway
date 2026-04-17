@@ -31,8 +31,8 @@ public class ValidateSessionService {
         }
 
         return jwtSessionProviderPort.parse(command.sessionToken())
-                .flatMap(this::resolveSession)
-                .flatMap(this::validateResolvedSession)
+                .flatMap(claims -> resolveSession(claims)
+                        .flatMap(session -> validateResolvedSession(claims, session)))
                 .map(session -> ValidateSessionResult.builder()
                         .authContext(session.toAuthContext())
                         .build());
@@ -46,7 +46,18 @@ public class ValidateSessionService {
                 .switchIfEmpty(Mono.error(new AuthenticationFailedException("Session not found")));
     }
 
-    private Mono<IdentitySession> validateResolvedSession(IdentitySession session) {
+    private Mono<IdentitySession> validateResolvedSession(JwtSessionClaims claims, IdentitySession session) {
+        if (!session.tokenId().equals(claims.tokenId())
+                || !safeEquals(session.sessionId(), claims.sessionId())
+                || !safeEquals(session.tenantId(), claims.tenantId())
+                || !safeEquals(session.subject(), claims.subject())) {
+            return auditEventPort.recordSessionValidationFailed(
+                            claims.tokenId().value(),
+                            "session_claims_mismatch"
+                    )
+                    .then(Mono.error(new AuthenticationFailedException("Session claims mismatch")));
+        }
+
         if (session.isRevoked()) {
             return auditEventPort.recordSessionValidationFailed(session.tokenId().value(), "session_revoked")
                     .then(Mono.error(new AuthenticationFailedException("Session revoked")));
@@ -66,5 +77,9 @@ public class ValidateSessionService {
                     }
                     return Mono.just(session);
                 });
+    }
+
+    private boolean safeEquals(String left, String right) {
+        return java.util.Objects.equals(left, right);
     }
 }

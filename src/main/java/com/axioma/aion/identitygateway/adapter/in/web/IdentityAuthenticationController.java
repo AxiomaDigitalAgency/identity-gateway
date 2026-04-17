@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/identity")
+@RequestMapping("/internal/identity")
 @RequiredArgsConstructor
 public class IdentityAuthenticationController {
 
