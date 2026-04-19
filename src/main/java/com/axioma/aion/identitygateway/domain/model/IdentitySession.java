@@ -1,45 +1,33 @@
 package com.axioma.aion.identitygateway.domain.model;
 
 import com.axioma.aion.identitygateway.domain.model.valueobject.TokenId;
-import com.axioma.aion.securitycore.model.AuthContext;
 import lombok.Builder;
 
 import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Map;
 
 @Builder
 public record IdentitySession(
-        String sessionId,
+        String id,
+        String identityContextId,
         String tenantId,
-        String subject,
         String channel,
-        String provider,
         TokenId tokenId,
+        String status,
         OffsetDateTime issuedAt,
         OffsetDateTime expiresAt,
-        OffsetDateTime revokedAt,
-        String authorities,
-        String attributes
+        OffsetDateTime lastSeenAt,
+        String clientIp,
+        String userAgent,
+        String metadataJson
 ) {
 
     public boolean isRevoked() {
-        return revokedAt != null;
+        return "REVOKED".equalsIgnoreCase(status);
     }
 
     public boolean isExpired(OffsetDateTime now) {
-        return expiresAt == null || !expiresAt.isAfter(now);
-    }
-
-    public AuthContext toAuthContext() {
-        return AuthContext.builder()
-                .tenantId(tenantId)
-                .subject(subject)
-                .channel(channel)
-                .provider(provider)
-                .authenticated(true)
-                .authorities(List.of())
-                .attributes(Map.of())
-                .build();
+        return "EXPIRED".equalsIgnoreCase(status)
+                || expiresAt == null
+                || !expiresAt.isAfter(now);
     }
 }

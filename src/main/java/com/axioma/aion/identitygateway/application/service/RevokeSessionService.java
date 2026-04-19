@@ -38,12 +38,12 @@ public class RevokeSessionService {
         OffsetDateTime now = clockPort.now();
         Duration ttl = calculateRemainingTtl(now, session.expiresAt());
 
-        return identitySessionRepositoryPort.markSessionAsRevoked(session.sessionId(), now)
+        return identitySessionRepositoryPort.markSessionAsRevoked(session.id(), now)
                 .then(sessionCachePort.delete(command.tokenId()))
-                .then(sessionCachePort.blacklistSession(session.sessionId(), ttl))
+                .then(sessionCachePort.blacklistSession(session.id(), ttl))
                 .then(auditEventPort.recordSessionRevoked(
                         session.tenantId(),
-                        session.sessionId(),
+                        session.id(),
                         command.tokenId().value(),
                         command.reason(),
                         command.requestedBy()
@@ -53,7 +53,7 @@ public class RevokeSessionService {
 
     private RevokeSessionResult buildResult(IdentitySession session, RevokeSessionCommand command) {
         return RevokeSessionResult.builder()
-                .sessionId(session.sessionId())
+                .sessionId(session.id())
                 .tokenId(command.tokenId())
                 .revoked(true)
                 .build();

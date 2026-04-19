@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -73,6 +74,8 @@ public class OAuthSecurityProvider implements SecurityProvider {
             return Mono.error(new AuthenticationFailedException("OAuth validation returned invalid subject"));
         }
 
+        Map<String, Object> attributes = normalizeAttributes(result.attributes());
+
         AuthContext authContext = AuthContext.builder()
                 .tenantId(result.tenantId())
                 .subject(result.subject())
@@ -80,7 +83,7 @@ public class OAuthSecurityProvider implements SecurityProvider {
                 .provider(PROVIDER_NAME)
                 .authenticated(true)
                 .authorities(result.authorities() != null ? result.authorities() : List.of())
-                .attributes(result.attributes() != null ? result.attributes() : Map.of())
+                .attributes(attributes)
                 .build();
 
         return Mono.just(SecurityResult.success(authContext));
@@ -97,5 +100,16 @@ public class OAuthSecurityProvider implements SecurityProvider {
 
     private String safe(String value, String fallback) {
         return isBlank(value) ? fallback : value;
+    }
+
+    private Map<String, Object> normalizeAttributes(Map<String, Object> source) {
+        Map<String, Object> attributes = source == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source);
+        Object snakeCaseId = attributes.get("identity_context_id");
+
+        if (!attributes.containsKey("identityContextId") && snakeCaseId != null) {
+            attributes.put("identityContextId", snakeCaseId);
+        }
+
+        return attributes;
     }
 }

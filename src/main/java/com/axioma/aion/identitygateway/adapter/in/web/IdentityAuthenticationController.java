@@ -13,9 +13,11 @@ import com.axioma.aion.identitygateway.application.service.AuthenticateIdentityS
 import com.axioma.aion.securitycore.model.SecurityRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+@Slf4j
 @RestController
 @RequestMapping("/internal/identity")
 @RequiredArgsConstructor
@@ -26,6 +28,7 @@ public class IdentityAuthenticationController {
 
     @PostMapping("/authenticate")
     public Mono<AuthenticateResponse> authenticate(@Valid @RequestBody AuthenticateRequest request) {
+        log.info("authenticate request");
         return authenticateIdentityService.execute(
                         AuthenticateIdentityCommand.builder()
                                 .securityRequest(toSecurityRequest(

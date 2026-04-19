@@ -6,6 +6,8 @@ import com.axioma.aion.identitygateway.domain.model.JwtSessionClaims;
 import com.axioma.aion.identitygateway.domain.model.valueobject.TokenId;
 import com.axioma.aion.identitygateway.domain.port.out.JwtSessionProviderPort;
 import com.axioma.aion.securitycore.exception.AuthenticationFailedException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -24,20 +26,22 @@ import java.util.Date;
 public class JwtSessionProviderAdapter implements JwtSessionProviderPort {
 
     private final JwtProperties jwtProperties;
+    private final ObjectMapper objectMapper;
 
     @Override
     public Mono<String> generate(IdentitySession identitySession) {
         return Mono.fromSupplier(() -> {
             SecretKey key = signingKey();
+            SessionMetadata metadata = readMetadata(identitySession.metadataJson());
 
             return Jwts.builder()
                     .issuer(jwtProperties.getIssuer())
-                    .subject(identitySession.subject())
+                    .subject(metadata.subject())
                     .id(identitySession.tokenId().value())
-                    .claim("sessionId", identitySession.sessionId())
+                    .claim("sessionId", identitySession.id())
                     .claim("tenantId", identitySession.tenantId())
                     .claim("channel", identitySession.channel())
-                    .claim("provider", identitySession.provider())
+                    .claim("provider", metadata.provider())
                     .issuedAt(Date.from(identitySession.issuedAt().toInstant()))
                     .expiration(Date.from(identitySession.expiresAt().toInstant()))
                     .signWith(key)
@@ -78,5 +82,19 @@ public class JwtSessionProviderAdapter implements JwtSessionProviderPort {
 
     private OffsetDateTime toOffsetDateTime(Date date) {
         return date == null ? null : date.toInstant().atOffset(ZoneOffset.UTC);
+    }
+
+    private SessionMetadata readMetadata(String metadataJson) {
+        try {
+            JsonNode root = objectMapper.readTree(metadataJson);
+            String subject = root.path("subject").asText(null);
+            String provider = root.path("provider").asText(null);
+            return new SessionMetadata(subject, provider);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to read session metadata", ex);
+        }
+    }
+
+    private record SessionMetadata(String subject, String provider) {
     }
 }

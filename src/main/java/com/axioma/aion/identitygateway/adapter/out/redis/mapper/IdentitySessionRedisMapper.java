@@ -14,17 +14,18 @@ public class IdentitySessionRedisMapper {
         }
 
         return IdentitySession.builder()
-                .sessionId(entity.getSessionId())
+                .id(entity.getId())
+                .identityContextId(entity.getIdentityContextId())
                 .tenantId(entity.getTenantId())
-                .subject(entity.getSubject())
                 .channel(entity.getChannel())
-                .provider(entity.getProvider())
                 .tokenId(new TokenId(entity.getTokenId()))
+                .status(entity.getStatus())
                 .issuedAt(entity.getIssuedAt())
                 .expiresAt(entity.getExpiresAt())
-                .revokedAt(entity.getRevokedAt())
-                .authorities(entity.getAuthorities())
-                .attributes(entity.getAttributes())
+                .lastSeenAt(entity.getLastSeenAt())
+                .clientIp(entity.getClientIp())
+                .userAgent(entity.getUserAgent())
+                .metadataJson(entity.getMetadataJson())
                 .build();
     }
 
@@ -34,17 +35,19 @@ public class IdentitySessionRedisMapper {
         }
 
         IdentitySessionRedisEntity entity = new IdentitySessionRedisEntity();
-        entity.setTokenId(session.tokenId().value());
-        entity.setSessionId(session.sessionId());
+        entity.setId(session.id());
+        entity.setIdentityContextId(session.identityContextId());
         entity.setTenantId(session.tenantId());
-        entity.setSubject(session.subject());
         entity.setChannel(session.channel());
-        entity.setProvider(session.provider());
+        entity.setTokenId(session.tokenId().value());
+        entity.setStatus(session.status());
         entity.setIssuedAt(session.issuedAt());
         entity.setExpiresAt(session.expiresAt());
-        entity.setRevokedAt(session.revokedAt());
-        entity.setAuthorities(session.authorities());
-        entity.setAttributes(session.attributes());
+        entity.setLastSeenAt(session.lastSeenAt());
+        entity.setClientIp(session.clientIp());
+        entity.setUserAgent(session.userAgent());
+        entity.setMetadataJson(session.metadataJson());
+
         return entity;
     }
 }

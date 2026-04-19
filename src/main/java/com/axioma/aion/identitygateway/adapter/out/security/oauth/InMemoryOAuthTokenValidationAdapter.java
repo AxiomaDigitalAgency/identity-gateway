@@ -22,7 +22,10 @@ public class InMemoryOAuthTokenValidationAdapter implements OAuthTokenValidation
                     .channel("api")
                     .allowed(true)
                     .authorities(List.of("read"))
-                    .attributes(Map.of("source", "in-memory"))
+                    .attributes(Map.of(
+                            "source", "in-memory",
+                            "identityContextId", "ctx-api-demo"
+                    ))
                     .build());
         }
 
