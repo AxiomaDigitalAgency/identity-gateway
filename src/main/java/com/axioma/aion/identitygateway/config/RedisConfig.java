@@ -1,6 +1,7 @@
 package com.axioma.aion.identitygateway.config;
 
 import com.axioma.aion.identitygateway.adapter.out.redis.entity.IdentitySessionRedisEntity;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
@@ -14,11 +15,13 @@ public class RedisConfig {
 
     @Bean
     public ReactiveRedisTemplate<String, IdentitySessionRedisEntity> identitySessionRedisTemplate(
-            ReactiveRedisConnectionFactory connectionFactory
+            ReactiveRedisConnectionFactory connectionFactory,
+            ObjectMapper objectMapper
     ) {
         StringRedisSerializer keySerializer = new StringRedisSerializer();
         Jackson2JsonRedisSerializer<IdentitySessionRedisEntity> valueSerializer =
                 new Jackson2JsonRedisSerializer<>(IdentitySessionRedisEntity.class);
+        valueSerializer.setObjectMapper(objectMapper);
 
         RedisSerializationContext<String, IdentitySessionRedisEntity> serializationContext =
                 RedisSerializationContext.<String, IdentitySessionRedisEntity>newSerializationContext(keySerializer)

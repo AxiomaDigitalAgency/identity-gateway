@@ -9,15 +9,16 @@ import java.time.OffsetDateTime;
 @Setter
 public class IdentitySessionRedisEntity {
 
-    private String tokenId;
-    private String sessionId;
+    private String id;
+    private String identityContextId;
     private String tenantId;
-    private String subject;
     private String channel;
-    private String provider;
+    private String tokenId;
+    private String status;
     private OffsetDateTime issuedAt;
     private OffsetDateTime expiresAt;
-    private OffsetDateTime revokedAt;
-    private String authorities;
-    private String attributes;
+    private OffsetDateTime lastSeenAt;
+    private String clientIp;
+    private String userAgent;
+    private String metadataJson;
 }

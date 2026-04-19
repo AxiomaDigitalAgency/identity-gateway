@@ -10,14 +10,14 @@ import java.time.OffsetDateTime;
 
 public interface IdentitySessionR2dbcRepository extends ReactiveCrudRepository<IdentitySessionEntity, String> {
 
-    Mono<IdentitySessionEntity> findByTokenId(String tokenId);
+    Mono<IdentitySessionEntity> findBySessionTokenId(String tokenId);
 
     @Modifying
     @Query("""
         UPDATE identity_session
-           SET revoked_at = :revokedAt,
+           SET status = 'REVOKED',
                update_date = :revokedAt
-         WHERE session_id = :sessionId
+         WHERE id = :sessionId
         """)
     Mono<Void> markSessionAsRevoked(String sessionId, OffsetDateTime revokedAt);
 }

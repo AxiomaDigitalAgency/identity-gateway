@@ -4,10 +4,12 @@ import com.axioma.aion.identitygateway.config.SecurityRoutingProperties;
 import com.axioma.aion.identitygateway.domain.port.out.SecurityProviderResolver;
 import com.axioma.aion.securitycore.exception.UnsupportedSecurityProviderException;
 import com.axioma.aion.securitycore.port.SecurityProvider;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+@Slf4j
 @Component
 public class SecurityProviderResolverImpl implements SecurityProviderResolver {
 
@@ -24,6 +26,7 @@ public class SecurityProviderResolverImpl implements SecurityProviderResolver {
 
     @Override
     public SecurityProvider resolve(String channel, String authType) {
+        log.debug("Resolving security provider for channel: {}, authType: {}", channel, authType);
         String configuredProviderName = securityRoutingProperties.getProviderRouting().get(channel);
 
         if (configuredProviderName == null || configuredProviderName.isBlank()) {
