@@ -2,89 +2,52 @@ package com.axioma.aion.identitygateway.adapter.in.web;
 
 import com.axioma.aion.identitygateway.adapter.in.web.dto.AuthenticateRequest;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.AuthenticateResponse;
-import com.axioma.aion.identitygateway.adapter.in.web.dto.ChannelSessionRequest;
-import com.axioma.aion.identitygateway.adapter.in.web.dto.ChannelSessionResponse;
-import com.axioma.aion.identitygateway.application.command.AuthenticateAndCreateSessionCommand;
-import com.axioma.aion.identitygateway.application.command.AuthenticateIdentityCommand;
-import com.axioma.aion.identitygateway.application.result.AuthenticateAndCreateSessionResult;
-import com.axioma.aion.identitygateway.application.result.AuthenticateIdentityResult;
-import com.axioma.aion.identitygateway.application.service.AuthenticateAndCreateSessionService;
-import com.axioma.aion.identitygateway.application.service.AuthenticateIdentityService;
-import com.axioma.aion.securitycore.model.SecurityRequest;
-import jakarta.validation.Valid;
+import com.axioma.aion.identitygateway.adapter.in.web.mapper.AuthenticateWebMapper;
+import com.axioma.aion.identitygateway.domain.port.in.AuthenticateIdentityUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-@Slf4j
 @RestController
 @RequestMapping("/internal/identity")
 @RequiredArgsConstructor
+@Slf4j
 public class IdentityAuthenticationController {
 
-    private final AuthenticateIdentityService authenticateIdentityService;
-    private final AuthenticateAndCreateSessionService authenticateAndCreateSessionService;
+    private final AuthenticateIdentityUseCase authenticateIdentityUseCase;
+    private final AuthenticateWebMapper authenticateWebMapper;
 
     @PostMapping("/authenticate")
-    public Mono<AuthenticateResponse> authenticate(@Valid @RequestBody AuthenticateRequest request) {
-        log.info("authenticate request");
-        return authenticateIdentityService.execute(
-                        AuthenticateIdentityCommand.builder()
-                                .securityRequest(toSecurityRequest(
-                                        request.channel(),
-                                        request.authType(),
-                                        request.credentials(),
-                                        request.metadata()
-                                ))
-                                .build()
-                )
-                .map(this::toAuthenticateResponse);
-    }
+    public Mono<AuthenticateResponse> authenticate(@RequestBody AuthenticateRequest request) {
+        String requestId = request != null && request.requestMetadata() != null
+                ? request.requestMetadata().requestId()
+                : null;
+        String authType = request != null && request.authenticationType() != null
+                ? request.authenticationType().name()
+                : null;
+        String credentialId = request != null
+                && request.credential() != null
+                && request.credential().credentialId() != null
+                ? request.credential().credentialId().toString()
+                : null;
+        String channel = request != null && request.channelContext() != null
+                ? request.channelContext().channel()
+                : null;
 
-    @PostMapping("/channel/session")
-    public Mono<ChannelSessionResponse> createChannelSession(@Valid @RequestBody ChannelSessionRequest request) {
-        return authenticateAndCreateSessionService.execute(
-                        AuthenticateAndCreateSessionCommand.builder()
-                                .securityRequest(toSecurityRequest(
-                                        request.channel(),
-                                        request.authType(),
-                                        request.credentials(),
-                                        request.metadata()
-                                ))
-                                .build()
-                )
-                .map(this::toChannelSessionResponse);
-    }
+        log.info("identity_authenticate_request_received requestId={} authenticationType={} credentialId={} channel={}",
+                requestId, authType, credentialId, channel);
 
-    private SecurityRequest toSecurityRequest(
-            String channel,
-            String authType,
-            java.util.Map<String, Object> credentials,
-            java.util.Map<String, Object> metadata
-    ) {
-        return SecurityRequest.builder()
-                .channel(channel)
-                .authType(authType)
-                .credentials(credentials)
-                .metadata(metadata)
-                .build();
-    }
-
-    private AuthenticateResponse toAuthenticateResponse(AuthenticateIdentityResult result) {
-        return AuthenticateResponse.builder()
-                .authenticated(result.authenticated())
-                .authContext(result.authContext())
-                .build();
-    }
-
-    private ChannelSessionResponse toChannelSessionResponse(AuthenticateAndCreateSessionResult result) {
-        return ChannelSessionResponse.builder()
-                .authenticated(result.authenticated())
-                .sessionToken(result.sessionToken())
-                .sessionId(result.sessionId())
-                .expiresAt(result.expiresAt())
-                .authContext(result.authContext())
-                .build();
+        return authenticateIdentityUseCase.authenticate(authenticateWebMapper.toCommand(request))
+                .doOnSuccess(response -> log.info(
+                        "identity_authenticate_request_completed requestId={} authenticationId={} authenticated={}",
+                        requestId,
+                        response != null ? response.authenticationId() : null,
+                        response != null && response.authenticated()))
+                .doOnError(error -> log.error(
+                        "identity_authenticate_request_failed requestId={} message={}",
+                        requestId,
+                        error.getMessage(),
+                        error));
     }
 }

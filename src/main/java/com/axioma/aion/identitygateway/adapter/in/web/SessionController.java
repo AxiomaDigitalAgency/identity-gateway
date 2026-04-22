@@ -13,12 +13,16 @@ import com.axioma.aion.identitygateway.application.service.ValidateSessionServic
 import com.axioma.aion.identitygateway.domain.port.out.JwtSessionProviderPort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/internal/identity/session")
 @RequiredArgsConstructor
+@Slf4j
 public class SessionController {
 
     private final ValidateSessionService validateSessionService;
@@ -27,25 +31,48 @@ public class SessionController {
 
     @PostMapping("/validate")
     public Mono<ValidateSessionResponse> validate(@Valid @RequestBody ValidateSessionRequest request) {
+        log.info("session_controller_validate_request_received sessionTokenPresent={}",
+                request != null && request.sessionToken() != null && !request.sessionToken().isBlank());
+
         return validateSessionService.execute(
                         ValidateSessionCommand.builder()
                                 .sessionToken(request.sessionToken())
                                 .build()
                 )
-                .map(this::toValidateResponse);
+                .map(this::toValidateResponse)
+                .doOnSuccess(response -> log.info(
+                        "session_controller_validate_request_completed valid={}",
+                        response != null && response.valid()))
+                .doOnError(error -> log.error(
+                        "session_controller_validate_request_failed message={}",
+                        error.getMessage(),
+                        error));
     }
 
     @PostMapping("/revoke")
     public Mono<RevokeSessionResponse> revoke(@Valid @RequestBody RevokeSessionRequest request) {
+        log.info("session_controller_revoke_request_received sessionTokenPresent={} reason={} requestedBy={}",
+                request != null && request.sessionToken() != null && !request.sessionToken().isBlank(),
+                request != null ? request.reason() : null,
+                request != null ? request.requestedBy() : null);
+
         return jwtSessionProviderPort.parse(request.sessionToken())
                 .flatMap(claims -> revokeSessionService.execute(
                         RevokeSessionCommand.builder()
-                                .tokenId(claims.tokenId())
+                                .sessionId(parseUuid(claims.sessionId()))
                                 .reason(request.reason())
                                 .requestedBy(request.requestedBy())
                                 .build()
                 ))
-                .map(this::toRevokeResponse);
+                .map(this::toRevokeResponse)
+                .doOnSuccess(response -> log.info(
+                        "session_controller_revoke_request_completed sessionId={} revoked={}",
+                        response != null ? response.sessionId() : null,
+                        response != null && response.revoked()))
+                .doOnError(error -> log.error(
+                        "session_controller_revoke_request_failed message={}",
+                        error.getMessage(),
+                        error));
     }
 
     private ValidateSessionResponse toValidateResponse(ValidateSessionResult result) {
@@ -60,5 +87,13 @@ public class SessionController {
                 .sessionId(result.sessionId())
                 .revoked(result.revoked())
                 .build();
+    }
+
+    private UUID parseUuid(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Invalid sessionId in token");
+        }
     }
 }

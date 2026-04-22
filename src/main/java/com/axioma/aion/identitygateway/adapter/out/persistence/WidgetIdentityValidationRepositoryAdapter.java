@@ -39,6 +39,7 @@ public class WidgetIdentityValidationRepositoryAdapter implements WidgetIdentity
               AND ic.subject_type = 'WIDGET'
               AND ic.status = 'ACTIVE'
               AND ic.active_reg_ind = TRUE
+              AND ic.tenant_id = :tenantId
               AND cred.credential_type = 'WIDGET_KEY_HASH'
               AND cred.status = 'ACTIVE'
               AND cred.active_reg_ind = TRUE
@@ -50,6 +51,7 @@ public class WidgetIdentityValidationRepositoryAdapter implements WidgetIdentity
     @Override
     public Mono<WidgetIdentityValidationResult> validate(String widgetKey, String origin) {
         return databaseClient.sql(SQL)
+                .bind("tenantId", widgetKey)
                 .map((row, metadata) -> WidgetIdentityJoinRow.builder()
                         .identityContextId(row.get("identity_context_id", String.class))
                         .tenantId(row.get("tenant_id", String.class))

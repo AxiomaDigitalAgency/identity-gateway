@@ -3,66 +3,48 @@ package com.axioma.aion.identitygateway.application.service;
 import com.axioma.aion.identitygateway.application.command.RevokeSessionCommand;
 import com.axioma.aion.identitygateway.application.result.RevokeSessionResult;
 import com.axioma.aion.identitygateway.domain.model.IdentitySession;
-import com.axioma.aion.identitygateway.domain.port.out.AuditEventPort;
-import com.axioma.aion.identitygateway.domain.port.out.ClockPort;
-import com.axioma.aion.identitygateway.domain.port.out.IdentitySessionRepositoryPort;
-import com.axioma.aion.identitygateway.domain.port.out.SessionCachePort;
+import com.axioma.aion.identitygateway.domain.port.out.SessionPort;
 import com.axioma.aion.securitycore.exception.AuthenticationFailedException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
-import java.time.OffsetDateTime;
-
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RevokeSessionService {
 
-    private final IdentitySessionRepositoryPort identitySessionRepositoryPort;
-    private final SessionCachePort sessionCachePort;
-    private final ClockPort clockPort;
-    private final AuditEventPort auditEventPort;
+    private final SessionPort sessionPort;
 
     public Mono<RevokeSessionResult> execute(RevokeSessionCommand command) {
-        return identitySessionRepositoryPort.findBySessionTokenId(command.tokenId())
+        if (command.sessionId() == null) {
+            return Mono.error(new IllegalArgumentException("sessionId is required"));
+        }
+
+        log.info("revoke_session_start sessionId={} reason={} requestedBy={}",
+                command.sessionId(), command.reason(), command.requestedBy());
+
+        return sessionPort.findById(command.sessionId())
                 .switchIfEmpty(Mono.error(new AuthenticationFailedException("Session not found")))
                 .flatMap(session -> revokeIfNeeded(command, session));
     }
 
     private Mono<RevokeSessionResult> revokeIfNeeded(RevokeSessionCommand command, IdentitySession session) {
         if (session.isRevoked()) {
-            return Mono.just(buildResult(session, command));
+            log.info("revoke_session_already_revoked sessionId={}", session.id());
+            return Mono.just(buildResult(session, true));
         }
 
-        OffsetDateTime now = clockPort.now();
-        Duration ttl = calculateRemainingTtl(now, session.expiresAt());
-
-        return identitySessionRepositoryPort.markSessionAsRevoked(session.id(), now)
-                .then(sessionCachePort.delete(command.tokenId()))
-                .then(sessionCachePort.blacklistSession(session.id(), ttl))
-                .then(auditEventPort.recordSessionRevoked(
-                        session.tenantId(),
-                        session.id(),
-                        command.tokenId().value(),
-                        command.reason(),
-                        command.requestedBy()
-                ))
-                .thenReturn(buildResult(session, command));
+        return sessionPort.revoke(session.id())
+                .doOnSuccess(unused -> log.info("revoke_session_completed sessionId={}", session.id()))
+                .thenReturn(buildResult(session, true));
     }
 
-    private RevokeSessionResult buildResult(IdentitySession session, RevokeSessionCommand command) {
+    private RevokeSessionResult buildResult(IdentitySession session, boolean revoked) {
         return RevokeSessionResult.builder()
-                .sessionId(session.id())
-                .tokenId(command.tokenId())
-                .revoked(true)
+                .sessionId(session.id() != null ? session.id().toString() : null)
+                .revoked(revoked)
                 .build();
-    }
-
-    private Duration calculateRemainingTtl(OffsetDateTime now, OffsetDateTime expiresAt) {
-        if (expiresAt == null || !expiresAt.isAfter(now)) {
-            return Duration.ZERO;
-        }
-        return Duration.between(now, expiresAt);
     }
 }

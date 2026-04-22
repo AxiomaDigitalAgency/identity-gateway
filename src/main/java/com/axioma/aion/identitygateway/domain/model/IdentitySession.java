@@ -1,24 +1,25 @@
 package com.axioma.aion.identitygateway.domain.model;
 
 import com.axioma.aion.identitygateway.domain.model.valueobject.TokenId;
+import com.axioma.aion.securitycore.model.AuthenticationType;
 import lombok.Builder;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Builder
 public record IdentitySession(
-        String id,
-        String identityContextId,
-        String tenantId,
+        UUID id,
+        UUID tenantId,
+        UUID credentialId,
+        String subject,
         String channel,
-        TokenId tokenId,
+        AuthenticationType authenticationType,
         String status,
-        OffsetDateTime issuedAt,
+        OffsetDateTime authenticatedAt,
+        OffsetDateTime sessionCreatedAt,
         OffsetDateTime expiresAt,
-        OffsetDateTime lastSeenAt,
-        String clientIp,
-        String userAgent,
-        String metadataJson
+        OffsetDateTime revokedAt
 ) {
 
     public boolean isRevoked() {

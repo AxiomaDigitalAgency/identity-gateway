@@ -26,7 +26,7 @@ public class SecurityProviderResolverImpl implements SecurityProviderResolver {
 
     @Override
     public SecurityProvider resolve(String channel, String authType) {
-        log.debug("Resolving security provider for channel: {}, authType: {}", channel, authType);
+        log.info("Resolving security provider for channel: {}, authType: {}", channel, authType);
         String configuredProviderName = securityRoutingProperties.getProviderRouting().get(channel);
 
         if (configuredProviderName == null || configuredProviderName.isBlank()) {

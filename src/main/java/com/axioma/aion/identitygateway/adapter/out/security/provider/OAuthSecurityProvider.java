@@ -77,12 +77,12 @@ public class OAuthSecurityProvider implements SecurityProvider {
         Map<String, Object> attributes = normalizeAttributes(result.attributes());
 
         AuthContext authContext = AuthContext.builder()
-                .tenantId(result.tenantId())
+                //.tenantId(result.tenantId())
                 .subject(result.subject())
                 .channel(safe(result.channel(), SUPPORTED_CHANNEL))
-                .provider(PROVIDER_NAME)
-                .authenticated(true)
-                .authorities(result.authorities() != null ? result.authorities() : List.of())
+                //.provider(PROVIDER_NAME)
+                //.authenticated(true)
+                //.authorities(result.authorities() != null ? result.authorities() : List.of())
                 .attributes(attributes)
                 .build();
 
