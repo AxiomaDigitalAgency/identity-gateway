@@ -1,139 +1,133 @@
 package com.axioma.aion.identitygateway.application.service;
 
+import com.axioma.aion.identitygateway.adapter.in.web.dto.CreateSessionResponse;
 import com.axioma.aion.identitygateway.application.command.CreateSessionCommand;
-import com.axioma.aion.identitygateway.application.result.CreateSessionResult;
 import com.axioma.aion.identitygateway.config.SessionProperties;
+import com.axioma.aion.identitygateway.domain.model.AuthenticatedPrincipal;
 import com.axioma.aion.identitygateway.domain.model.IdentitySession;
-import com.axioma.aion.identitygateway.domain.model.valueobject.TokenId;
-import com.axioma.aion.identitygateway.domain.port.out.AuditEventPort;
+import com.axioma.aion.identitygateway.domain.port.in.CreateSessionUseCase;
+import com.axioma.aion.identitygateway.domain.port.out.AuthenticationStatePort;
 import com.axioma.aion.identitygateway.domain.port.out.ClockPort;
 import com.axioma.aion.identitygateway.domain.port.out.IdGeneratorPort;
-import com.axioma.aion.identitygateway.domain.port.out.IdentitySessionRepositoryPort;
-import com.axioma.aion.identitygateway.domain.port.out.JwtSessionProviderPort;
-import com.axioma.aion.identitygateway.domain.port.out.SessionCachePort;
-import com.axioma.aion.securitycore.exception.InvalidSecurityRequestException;
+import com.axioma.aion.identitygateway.domain.port.out.JwtSessionTokenPort;
+import com.axioma.aion.identitygateway.domain.port.out.SessionPort;
 import com.axioma.aion.securitycore.model.AuthContext;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.HashMap;
+import java.util.UUID;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
-public class CreateSessionService {
+@Slf4j
+public class CreateSessionService implements CreateSessionUseCase {
 
-    private final IdentitySessionRepositoryPort identitySessionRepositoryPort;
-    private final SessionCachePort sessionCachePort;
-    private final JwtSessionProviderPort jwtSessionProviderPort;
+    private final AuthenticationStatePort authenticationStatePort;
+    private final SessionPort sessionPort;
+    private final JwtSessionTokenPort jwtSessionTokenPort;
     private final ClockPort clockPort;
     private final IdGeneratorPort idGeneratorPort;
-    private final AuditEventPort auditEventPort;
     private final SessionProperties sessionProperties;
-    private final ObjectMapper objectMapper;
 
-    public Mono<CreateSessionResult> execute(CreateSessionCommand command) {
-        AuthContext authContext = command.authContext();
-
-        if (authContext == null || !authContext.isValidForSession()) {
-            return Mono.error(new InvalidSecurityRequestException("Invalid auth context for session creation"));
+    @Override
+    public Mono<CreateSessionResponse> createSession(CreateSessionCommand command) {
+        if (command.authenticationId() == null) {
+            return Mono.error(new IllegalArgumentException("authenticationId is required"));
         }
 
-        String identityContextId = readIdentityContextId(authContext);
-        if (identityContextId == null || identityContextId.isBlank()) {
-            return Mono.error(new InvalidSecurityRequestException("identityContextId must not be blank"));
+        log.info("create_session_start authenticationId={}", command.authenticationId());
+
+        return authenticationStatePort.isConsumed(command.authenticationId())
+                .doOnNext(consumed -> log.info(
+                        "create_session_consumed_check authenticationId={} consumed={}",
+                        command.authenticationId(),
+                        consumed))
+                .flatMap(consumed -> consumed
+                        ? Mono.error(new IllegalStateException("Authentication already consumed"))
+                        : authenticationStatePort.findByAuthenticationId(command.authenticationId())
+                )
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("Authentication not found")))
+                .doOnNext(principal -> log.info(
+                        "create_session_authentication_state_found authenticationId={} tenantId={} credentialId={} expiresAt={}",
+                        command.authenticationId(),
+                        principal.tenantId(),
+                        principal.credentialId(),
+                        principal.expiresAt()))
+                .flatMap(this::validateAuthenticationState)
+                .flatMap(principal -> createSession(principal)
+                        .flatMap(session -> {
+                            log.info("create_session_persisted authenticationId={} sessionId={} tenantId={} expiresAt={}",
+                                    principal.authenticationId(), session.id(), session.tenantId(), session.expiresAt());
+                            AuthContext authContext = toAuthContext(principal, session);
+                            return jwtSessionTokenPort.generate(authContext)
+                                    .doOnNext(token -> log.info(
+                                            "create_session_token_generated authenticationId={} sessionId={} tokenLength={}",
+                                            principal.authenticationId(),
+                                            session.id(),
+                                            token != null ? token.length() : 0))
+                                    .flatMap(token -> authenticationStatePort.markConsumed(principal.authenticationId())
+                                            .doOnSuccess(unused -> log.info(
+                                                    "create_session_authentication_marked_consumed authenticationId={}",
+                                                    principal.authenticationId()))
+                                            .thenReturn(new CreateSessionResponse(
+                                                    session.id(),
+                                                    token,
+                                                    authContext
+                                            )));
+                        })
+                );
+    }
+
+    private Mono<AuthenticatedPrincipal> validateAuthenticationState(AuthenticatedPrincipal principal) {
+        OffsetDateTime now = clockPort.now();
+        if (principal.expiresAt().isBefore(now)) {
+            return Mono.error(new IllegalStateException("Authentication expired"));
+        }
+        log.info("create_session_authentication_state_valid authenticationId={} now={} expiresAt={}",
+                principal.authenticationId(), now, principal.expiresAt());
+        return Mono.just(principal);
+    }
+
+    private Mono<IdentitySession> createSession(AuthenticatedPrincipal principal) {
+        OffsetDateTime sessionCreatedAt = clockPort.now();
+        OffsetDateTime sessionExpiresAt = sessionCreatedAt.plusSeconds(sessionProperties.getTtlSeconds());
+        UUID sessionId = idGeneratorPort.generate();
+        if (sessionId == null) {
+            return Mono.error(new IllegalStateException("Generated sessionId is null"));
         }
 
-        OffsetDateTime issuedAt = clockPort.now();
-        OffsetDateTime expiresAt = issuedAt.plusSeconds(sessionProperties.getTtlSeconds());
-
-        IdentitySession identitySession = IdentitySession.builder()
-                .id(idGeneratorPort.generateSessionId())
-                .identityContextId(identityContextId)
-                .tenantId(authContext.tenantId())
-                .channel(normalizeChannelForStorage(authContext.channel()))
-                .tokenId(new TokenId(idGeneratorPort.generateTokenId()))
-                .status("ACTIVE")
-                .issuedAt(issuedAt)
-                .expiresAt(expiresAt)
-                .lastSeenAt(null)
-                .clientIp(null)
-                .userAgent(null)
-                .metadataJson(buildMetadataJson(authContext))
-                .build();
-
-        log.info(
-                "create_session_attempt id={} identityContextId={} tenantId={} channel={} tokenId={} status={}",
-                identitySession.id(),
-                identitySession.identityContextId(),
-                identitySession.tenantId(),
-                identitySession.channel(),
-                identitySession.tokenId().value(),
-                identitySession.status()
+        IdentitySession session = new IdentitySession(
+                sessionId,
+                principal.tenantId(),
+                principal.credentialId(),
+                principal.subject(),
+                principal.channel(),
+                principal.authenticationType(),
+                "ACTIVE",
+                principal.authenticatedAt(),
+                sessionCreatedAt,
+                sessionExpiresAt,
+                null
         );
 
-        return identitySessionRepositoryPort.save(identitySession)
-                .flatMap(saved ->
-                        jwtSessionProviderPort.generate(saved)
-                                .flatMap(sessionToken ->
-                                        sessionCachePort.save(
-                                                        saved,
-                                                        Duration.ofSeconds(sessionProperties.getTtlSeconds())
-                                                )
-                                                .then(auditEventPort.recordSessionCreated(
-                                                        saved.tenantId(),
-                                                        saved.id(),
-                                                        saved.tokenId().value(),
-                                                        authContext.subject(),
-                                                        authContext.channel(),
-                                                        authContext.provider()
-                                                ))
-                                                .thenReturn(CreateSessionResult.builder()
-                                                        .sessionToken(sessionToken)
-                                                        .sessionId(saved.id())
-                                                        .tokenId(saved.tokenId())
-                                                        .expiresAt(saved.expiresAt())
-                                                        .authContext(authContext)
-                                                        .build())
-                                )
-                )
-                .doOnError(error -> log.error(
-                        "create_session_error tenantId={} identityContextId={} channel={} message={}",
-                        identitySession.tenantId(),
-                        identitySession.identityContextId(),
-                        identitySession.channel(),
-                        error.getMessage(),
-                        error
-                ));
+        return sessionPort.save(session);
     }
 
-    private String readIdentityContextId(AuthContext authContext) {
-        Object value = authContext.safeAttributes().get("identityContextId");
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private String normalizeChannelForStorage(String channel) {
-        return channel == null ? null : channel.toUpperCase();
-    }
-
-    private String buildMetadataJson(AuthContext authContext) {
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("subject", authContext.subject());
-        metadata.put("provider", authContext.provider());
-        metadata.put("authorities", authContext.safeAuthorities());
-        metadata.put("attributes", authContext.safeAttributes());
-
-        try {
-            return objectMapper.writeValueAsString(metadata);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Failed to serialize session metadata", ex);
-        }
+    private AuthContext toAuthContext(AuthenticatedPrincipal principal, IdentitySession session) {
+        return new AuthContext(
+                session.tenantId(),
+                session.credentialId(),
+                session.channel(),
+                session.subject(),
+                session.id(),
+                session.authenticationType(),
+                session.authenticatedAt(),
+                session.expiresAt(),
+                new HashMap<>(principal.attributes())
+        );
     }
 }

@@ -1,11 +1,12 @@
 package com.axioma.aion.identitygateway.application.command;
 
-import com.axioma.aion.identitygateway.domain.model.valueobject.TokenId;
 import lombok.Builder;
+
+import java.util.UUID;
 
 @Builder
 public record RevokeSessionCommand(
-        TokenId tokenId,
+        UUID sessionId,
         String reason,
         String requestedBy
 ) {

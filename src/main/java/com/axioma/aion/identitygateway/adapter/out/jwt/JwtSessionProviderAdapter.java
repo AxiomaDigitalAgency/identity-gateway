@@ -32,17 +32,17 @@ public class JwtSessionProviderAdapter implements JwtSessionProviderPort {
     public Mono<String> generate(IdentitySession identitySession) {
         return Mono.fromSupplier(() -> {
             SecretKey key = signingKey();
-            SessionMetadata metadata = readMetadata(identitySession.metadataJson());
+            //SessionMetadata metadata = readMetadata(identitySession.metadataJson());
 
             return Jwts.builder()
                     .issuer(jwtProperties.getIssuer())
-                    .subject(metadata.subject())
-                    .id(identitySession.tokenId().value())
+                    //.subject(metadata.subject())
+                    //.id(identitySession.tokenId().value())
                     .claim("sessionId", identitySession.id())
                     .claim("tenantId", identitySession.tenantId())
                     .claim("channel", identitySession.channel())
-                    .claim("provider", metadata.provider())
-                    .issuedAt(Date.from(identitySession.issuedAt().toInstant()))
+                    //.claim("provider", metadata.provider())
+                    //.issuedAt(Date.from(identitySession.issuedAt().toInstant()))
                     .expiration(Date.from(identitySession.expiresAt().toInstant()))
                     .signWith(key)
                     .compact();

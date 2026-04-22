@@ -77,12 +77,12 @@ public class WidgetSecurityProvider implements SecurityProvider {
         }
 
         AuthContext authContext = AuthContext.builder()
-                .tenantId(result.tenantId())
+                //.tenantId(result.tenantId())
                 .subject("widget:" + safe(result.subjectValue()))
                 .channel("web")
-                .provider(PROVIDER_NAME)
-                .authenticated(true)
-                .authorities(List.of())
+                //.provider(PROVIDER_NAME)
+                //.authenticated(true)
+                //.authorities(List.of())
                 .attributes(Map.of(
                         "identityContextId", safe(result.identityContextId()),
                         "origin", safe(result.origin()),
@@ -97,6 +97,15 @@ public class WidgetSecurityProvider implements SecurityProvider {
     private String readString(Map<String, Object> source, String key) {
         Object value = source.get(key);
         return value == null ? null : String.valueOf(value);
+    }
+
+    private String readIdentityContextId(Map<String, Object> source) {
+        Object camelCaseValue = source.get("identityContextId");
+        if (camelCaseValue != null) {
+            return String.valueOf(camelCaseValue);
+        }
+        Object snakeCaseValue = source.get("identity_context_id");
+        return snakeCaseValue == null ? null : String.valueOf(snakeCaseValue);
     }
 
     private boolean isBlank(String value) {
