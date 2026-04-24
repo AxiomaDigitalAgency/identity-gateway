@@ -10,11 +10,13 @@ import com.axioma.aion.identitygateway.application.result.RevokeSessionResult;
 import com.axioma.aion.identitygateway.application.result.ValidateSessionResult;
 import com.axioma.aion.identitygateway.application.service.RevokeSessionService;
 import com.axioma.aion.identitygateway.application.service.ValidateSessionService;
+import com.axioma.aion.identitygateway.config.observability.TraceIdUtils;
 import com.axioma.aion.identitygateway.domain.port.out.JwtSessionProviderPort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -30,9 +32,10 @@ public class SessionController {
     private final JwtSessionProviderPort jwtSessionProviderPort;
 
     @PostMapping("/validate")
-    public Mono<ValidateSessionResponse> validate(@Valid @RequestBody ValidateSessionRequest request) {
-        log.info("session_controller_validate_request_received sessionTokenPresent={}",
-                request != null && request.sessionToken() != null && !request.sessionToken().isBlank());
+    public Mono<ValidateSessionResponse> validate(@Valid @RequestBody ValidateSessionRequest request
+            ,ServerWebExchange exchange) {
+        String traceId = TraceIdUtils.getRequired(exchange);
+        log.info("SESSION_VALIDATE_REQUEST traceId={}", traceId);
 
         return validateSessionService.execute(
                         ValidateSessionCommand.builder()
@@ -41,20 +44,23 @@ public class SessionController {
                 )
                 .map(this::toValidateResponse)
                 .doOnSuccess(response -> log.info(
-                        "session_controller_validate_request_completed valid={}",
-                        response != null && response.valid()))
+                        "SESSION_VALIDATED traceId={} tenantId={} sessionId={}",
+                        traceId,
+                        response.authContext().tenantId(),
+                        response.authContext().sessionId()
+                ))
                 .doOnError(error -> log.error(
-                        "session_controller_validate_request_failed message={}",
-                        error.getMessage(),
-                        error));
+                        "SESSION_VALIDATE_FAILED traceId={} error={}",
+                        traceId,
+                        error.getMessage()
+                ));
     }
 
     @PostMapping("/revoke")
-    public Mono<RevokeSessionResponse> revoke(@Valid @RequestBody RevokeSessionRequest request) {
-        log.info("session_controller_revoke_request_received sessionTokenPresent={} reason={} requestedBy={}",
-                request != null && request.sessionToken() != null && !request.sessionToken().isBlank(),
-                request != null ? request.reason() : null,
-                request != null ? request.requestedBy() : null);
+    public Mono<RevokeSessionResponse> revoke(@Valid @RequestBody RevokeSessionRequest request
+            ,ServerWebExchange exchange) {
+        String traceId = TraceIdUtils.getRequired(exchange);
+        log.info("SESSION_REVOKE_REQUEST  traceId={}", traceId);
 
         return jwtSessionProviderPort.parse(request.sessionToken())
                 .flatMap(claims -> revokeSessionService.execute(
@@ -66,13 +72,16 @@ public class SessionController {
                 ))
                 .map(this::toRevokeResponse)
                 .doOnSuccess(response -> log.info(
-                        "session_controller_revoke_request_completed sessionId={} revoked={}",
-                        response != null ? response.sessionId() : null,
-                        response != null && response.revoked()))
+                        "SESSION_REVOKED  traceId={} revoked={} sessionId={}",
+                        traceId,
+                        response.revoked(),
+                        response.sessionId()
+                ))
                 .doOnError(error -> log.error(
-                        "session_controller_revoke_request_failed message={}",
-                        error.getMessage(),
-                        error));
+                        "SESSION_REVOKE_FAILED   traceId={} error={}",
+                        traceId,
+                        error.getMessage()
+                ));
     }
 
     private ValidateSessionResponse toValidateResponse(ValidateSessionResult result) {
