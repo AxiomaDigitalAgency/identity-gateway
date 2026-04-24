@@ -3,10 +3,12 @@ package com.axioma.aion.identitygateway.adapter.in.web;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.CreateSessionRequest;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.CreateSessionResponse;
 import com.axioma.aion.identitygateway.adapter.in.web.mapper.CreateSessionWebMapper;
+import com.axioma.aion.identitygateway.config.observability.TraceIdUtils;
 import com.axioma.aion.identitygateway.domain.port.in.CreateSessionUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -19,25 +21,24 @@ public class IdentitySessionController {
     private final CreateSessionWebMapper createSessionWebMapper;
 
     @PostMapping("/session")
-    public Mono<CreateSessionResponse> createSession(@RequestBody CreateSessionRequest request) {
-        if (request == null) {
-            log.warn("identity_session_create_request_invalid reason=request_body_null");
-            return Mono.error(new IllegalArgumentException("Request body is required"));
-        }
-
-        log.info("identity_session_create_request_received authenticationId={}",
-                request.authenticationId());
-
+    public Mono<CreateSessionResponse> createSession(@RequestBody CreateSessionRequest request
+            ,ServerWebExchange exchange) {
+        String traceId = TraceIdUtils.getRequired(exchange);
+        log.info("SESSION_CREATE_REQUEST traceId={} authenticationId={}",
+                traceId,
+                request.authenticationId()
+        );
         return createSessionUseCase.createSession(createSessionWebMapper.toCommand(request))
                 .doOnSuccess(response -> log.info(
-                        "identity_session_create_request_completed authenticationId={} sessionId={} hasToken={}",
-                        request.authenticationId(),
-                        response != null ? response.sessionId() : null,
-                        response != null && response.sessionToken() != null && !response.sessionToken().isBlank()))
+                        "SESSION_CREATED traceId={} tenantId={} sessionId={}",
+                        traceId,
+                        response.authContext().tenantId(),
+                        response.authContext().sessionId()
+                ))
                 .doOnError(error -> log.error(
-                        "identity_session_create_request_failed authenticationId={} message={}",
-                        request.authenticationId(),
-                        error.getMessage(),
-                        error));
+                        "SESSION_CREATE_FAILED traceId={} error={}",
+                        traceId,
+                        error.getMessage()
+                ));
     }
 }

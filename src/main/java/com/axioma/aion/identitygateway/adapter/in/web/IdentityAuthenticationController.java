@@ -3,10 +3,12 @@ package com.axioma.aion.identitygateway.adapter.in.web;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.AuthenticateRequest;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.AuthenticateResponse;
 import com.axioma.aion.identitygateway.adapter.in.web.mapper.AuthenticateWebMapper;
+import com.axioma.aion.identitygateway.config.observability.TraceIdUtils;
 import com.axioma.aion.identitygateway.domain.port.in.AuthenticateIdentityUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -19,7 +21,13 @@ public class IdentityAuthenticationController {
     private final AuthenticateWebMapper authenticateWebMapper;
 
     @PostMapping("/authenticate")
-    public Mono<AuthenticateResponse> authenticate(@RequestBody AuthenticateRequest request) {
+    public Mono<AuthenticateResponse> authenticate(@RequestBody AuthenticateRequest request, ServerWebExchange exchange) {
+        String traceId = TraceIdUtils.getRequired(exchange);
+        log.info("AUTHENTICATION_REQUEST traceId={} channel={} subject={}",
+                traceId,
+                request.channelContext().channel(),
+                request.subjectContext().subject()
+        );
         String requestId = request != null && request.requestMetadata() != null
                 ? request.requestMetadata().requestId()
                 : null;
@@ -40,14 +48,15 @@ public class IdentityAuthenticationController {
 
         return authenticateIdentityUseCase.authenticate(authenticateWebMapper.toCommand(request))
                 .doOnSuccess(response -> log.info(
-                        "identity_authenticate_request_completed requestId={} authenticationId={} authenticated={}",
-                        requestId,
-                        response != null ? response.authenticationId() : null,
-                        response != null && response.authenticated()))
+                        "AUTHENTICATION_SUCCESS traceId={} tenantId={} subject={}",
+                        traceId,
+                        response.tenantId(),
+                        response.subject()
+                ))
                 .doOnError(error -> log.error(
-                        "identity_authenticate_request_failed requestId={} message={}",
-                        requestId,
-                        error.getMessage(),
-                        error));
+                        "AUTHENTICATION_FAILED traceId={} error={}",
+                        traceId,
+                        error.getMessage()
+                ));
     }
 }
