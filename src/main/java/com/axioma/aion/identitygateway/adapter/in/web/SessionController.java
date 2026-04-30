@@ -10,6 +10,7 @@ import com.axioma.aion.identitygateway.application.result.RevokeSessionResult;
 import com.axioma.aion.identitygateway.application.result.ValidateSessionResult;
 import com.axioma.aion.identitygateway.application.service.RevokeSessionService;
 import com.axioma.aion.identitygateway.application.service.ValidateSessionService;
+import com.axioma.aion.identitygateway.config.observability.LogEvents;
 import com.axioma.aion.identitygateway.config.observability.TraceIdUtils;
 import com.axioma.aion.identitygateway.domain.port.out.JwtSessionProviderPort;
 import jakarta.validation.Valid;
@@ -35,7 +36,7 @@ public class SessionController {
     public Mono<ValidateSessionResponse> validate(@Valid @RequestBody ValidateSessionRequest request
             ,ServerWebExchange exchange) {
         String traceId = TraceIdUtils.getRequired(exchange);
-        log.info("SESSION_VALIDATE_REQUEST traceId={}", traceId);
+        log.info("event={} traceId={}", LogEvents.SESSION_VALIDATE_REQUEST, traceId);
 
         return validateSessionService.execute(
                         ValidateSessionCommand.builder()
@@ -44,13 +45,15 @@ public class SessionController {
                 )
                 .map(this::toValidateResponse)
                 .doOnSuccess(response -> log.info(
-                        "SESSION_VALIDATED traceId={} tenantId={} sessionId={}",
+                        "event={} traceId={} tenantId={} sessionId={}",
+                        LogEvents.SESSION_VALIDATED,
                         traceId,
                         response.authContext().tenantId(),
                         response.authContext().sessionId()
                 ))
                 .doOnError(error -> log.error(
-                        "SESSION_VALIDATE_FAILED traceId={} error={}",
+                        "event={} traceId={} error={}",
+                        LogEvents.ERROR,
                         traceId,
                         error.getMessage()
                 ));
@@ -60,7 +63,7 @@ public class SessionController {
     public Mono<RevokeSessionResponse> revoke(@Valid @RequestBody RevokeSessionRequest request
             ,ServerWebExchange exchange) {
         String traceId = TraceIdUtils.getRequired(exchange);
-        log.info("SESSION_REVOKE_REQUEST  traceId={}", traceId);
+        log.info("event={} traceId={}", LogEvents.SESSION_REVOKE_REQUEST, traceId);
 
         return jwtSessionProviderPort.parse(request.sessionToken())
                 .flatMap(claims -> revokeSessionService.execute(
@@ -72,13 +75,15 @@ public class SessionController {
                 ))
                 .map(this::toRevokeResponse)
                 .doOnSuccess(response -> log.info(
-                        "SESSION_REVOKED  traceId={} revoked={} sessionId={}",
+                        "event={} traceId={} revoked={} sessionId={}",
+                        LogEvents.SESSION_REVOKED,
                         traceId,
                         response.revoked(),
                         response.sessionId()
                 ))
                 .doOnError(error -> log.error(
-                        "SESSION_REVOKE_FAILED   traceId={} error={}",
+                        "event={} traceId={} error={}",
+                        LogEvents.ERROR,
                         traceId,
                         error.getMessage()
                 ));

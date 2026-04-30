@@ -3,6 +3,7 @@ package com.axioma.aion.identitygateway.adapter.in.web;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.CreateSessionRequest;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.CreateSessionResponse;
 import com.axioma.aion.identitygateway.adapter.in.web.mapper.CreateSessionWebMapper;
+import com.axioma.aion.identitygateway.config.observability.LogEvents;
 import com.axioma.aion.identitygateway.config.observability.TraceIdUtils;
 import com.axioma.aion.identitygateway.domain.port.in.CreateSessionUseCase;
 import lombok.RequiredArgsConstructor;
@@ -24,19 +25,22 @@ public class IdentitySessionController {
     public Mono<CreateSessionResponse> createSession(@RequestBody CreateSessionRequest request
             ,ServerWebExchange exchange) {
         String traceId = TraceIdUtils.getRequired(exchange);
-        log.info("SESSION_CREATE_REQUEST traceId={} authenticationId={}",
+        log.info("event={} traceId={} authenticationId={}",
+                LogEvents.SESSION_CREATE_REQUEST,
                 traceId,
                 request.authenticationId()
         );
         return createSessionUseCase.createSession(createSessionWebMapper.toCommand(request))
                 .doOnSuccess(response -> log.info(
-                        "SESSION_CREATED traceId={} tenantId={} sessionId={}",
+                        "event={} traceId={} tenantId={} sessionId={}",
+                        LogEvents.SESSION_CREATED,
                         traceId,
                         response.authContext().tenantId(),
                         response.authContext().sessionId()
                 ))
                 .doOnError(error -> log.error(
-                        "SESSION_CREATE_FAILED traceId={} error={}",
+                        "event={} traceId={} error={}",
+                        LogEvents.ERROR,
                         traceId,
                         error.getMessage()
                 ));

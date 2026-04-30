@@ -3,6 +3,7 @@ package com.axioma.aion.identitygateway.adapter.in.web;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.AuthenticateRequest;
 import com.axioma.aion.identitygateway.adapter.in.web.dto.AuthenticateResponse;
 import com.axioma.aion.identitygateway.adapter.in.web.mapper.AuthenticateWebMapper;
+import com.axioma.aion.identitygateway.config.observability.LogEvents;
 import com.axioma.aion.identitygateway.config.observability.TraceIdUtils;
 import com.axioma.aion.identitygateway.domain.port.in.AuthenticateIdentityUseCase;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,8 @@ public class IdentityAuthenticationController {
     @PostMapping("/authenticate")
     public Mono<AuthenticateResponse> authenticate(@RequestBody AuthenticateRequest request, ServerWebExchange exchange) {
         String traceId = TraceIdUtils.getRequired(exchange);
-        log.info("AUTHENTICATION_REQUEST traceId={} channel={} subject={}",
+        log.info("event={} traceId={} channel={} subject={}",
+                LogEvents.AUTHENTICATION_REQUEST,
                 traceId,
                 request.channelContext().channel(),
                 request.subjectContext().subject()
@@ -43,18 +45,20 @@ public class IdentityAuthenticationController {
                 ? request.channelContext().channel()
                 : null;
 
-        log.info("identity_authenticate_request_received requestId={} authenticationType={} credentialId={} channel={}",
-                requestId, authType, credentialId, channel);
+        log.info("event={} traceId={} requestId={} authenticationType={} credentialId={} channel={}",
+                LogEvents.AUTHENTICATION_REQUEST, traceId, requestId, authType, credentialId, channel);
 
         return authenticateIdentityUseCase.authenticate(authenticateWebMapper.toCommand(request))
                 .doOnSuccess(response -> log.info(
-                        "AUTHENTICATION_SUCCESS traceId={} tenantId={} subject={}",
+                        "event={} traceId={} tenantId={} subject={}",
+                        LogEvents.AUTHENTICATION_SUCCESS,
                         traceId,
                         response.tenantId(),
                         response.subject()
                 ))
                 .doOnError(error -> log.error(
-                        "AUTHENTICATION_FAILED traceId={} error={}",
+                        "event={} traceId={} error={}",
+                        LogEvents.ERROR,
                         traceId,
                         error.getMessage()
                 ));
